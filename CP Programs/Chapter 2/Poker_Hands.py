@@ -1,375 +1,147 @@
 import sys
 
-def card_value(value):
-    if value == 'A':
-        return 0
-    elif value == 'T':
-        return 9
-    elif value == 'J':
-        return 10
-    elif value == 'Q':
-        return 11
-    elif value == 'K':
-        return 12
+
+class Hand:
+    HIGH_CARD, PAIR, TWO_PAIRS, THREE_OF_A_KIND, STRAIGHT, \
+    FLUSH, FULL_HOUSE, FOUR_OF_A_KIND, STRAIGHT_FLUSH = range(1, 10)
+
+    def __init__(self, cards):
+        values = [card[0] for card in cards]
+        values = [v if v != 'T' else 10 for v in values]
+        values = [v if v != 'J' else 11 for v in values]
+        values = [v if v != 'Q' else 12 for v in values]
+        values = [v if v != 'K' else 13 for v in values]
+        values = [v if v != 'A' else 14 for v in values]
+        self.values = sorted([int(v) for v in values])
+        self.value_counts = {v: self.values.count(v) for v in range(2, 15)}
+
+        suits = [card[1] for card in cards]
+        self.suit_counts = {s: suits.count(s) for s in ['C', 'D', 'H', 'S']}
+
+        # Calculate the type of the hand and its associated value
+        fns = [self.has_straight_flush, self.has_four_of_a_kind, self.has_full_house,
+               self.has_flush, self.has_straight, self.has_three_of_a_kind,
+               self.has_two_pairs, self.has_pair, self.has_high_card]
+        for fn in fns:
+            self.type, self.value = fn()
+            if self.type != 0:
+                break
+
+    def has_high_card(self):
+        return self.HIGH_CARD, max(self.values)
+
+    def has_pair(self):
+        pair_values = [k for k, v in self.value_counts.items() if v == 2]
+        if pair_values:
+            return self.PAIR, pair_values[0]
+        return 0, None
+
+    def has_two_pairs(self):
+        pair_values = [k for k, v in self.value_counts.items() if v == 2]
+        if len(pair_values) == 2:
+            return self.TWO_PAIRS, max(pair_values)
+        return 0, None
+
+    def has_three_of_a_kind(self):
+        for k, v in self.value_counts.items():
+            if v == 3:
+                return self.THREE_OF_A_KIND, k
+        return 0, None
+
+    def has_straight(self):
+        if self.are_consecutive():
+            return self.STRAIGHT, max(self.values)
+        return 0, None
+
+    def has_flush(self):
+        if any(v == 5 for v in self.suit_counts.values()):
+            return self.FLUSH, max(self.values)
+        return 0, None
+
+    def has_full_house(self):
+        has_pair, _ = self.has_pair()
+        if has_pair:
+            for k, v in self.value_counts.items():
+                if v == 3:
+                    return self.FULL_HOUSE, k
+        return 0, None
+
+    def has_four_of_a_kind(self):
+        for k, v in self.value_counts.items():
+            if v == 4:
+                return self.FOUR_OF_A_KIND, k
+        return 0, None
+
+    def has_straight_flush(self):
+        has_straight, max_val = self.has_straight()
+        if has_straight and any(v == 5 for v in self.suit_counts.values()):
+            return self.STRAIGHT_FLUSH, max_val
+        return 0, None
+
+    def are_consecutive(self):
+        values = self.values
+        if 2 in values: values = [v if v != 14 else 1 for v in values]
+        return values[0] == values[1] - 1 == values[2] - 2 == values[3] - 3 == values[4] - 4
+
+
+BLACK_WINS = 'Black wins.'
+WHITE_WINS = 'White wins.'
+TIE = 'Tie.'
+
+
+def compare_values(black_values, white_values):
+    for i in range(len(black_values) - 1, -1, -1):
+        if black_values[i] > white_values[i]:
+            return BLACK_WINS
+        elif white_values[i] > black_values[i]:
+            return WHITE_WINS
+    return TIE
+
+
+def solve(black, white):
+    if black.type > white.type:
+        return BLACK_WINS
+    elif white.type > black.type:
+        return WHITE_WINS
     else:
-        return int(value) - 1
-
-def hand_value(flush):
-    values = []
-    hand_value = None
-    last = hand[0]
-    straight = True
-
-    if not last:
-        if hand[4] == 12:
-            for i in range(4):
-                if hand[i] - 1 != hand[i + 1]:
-                    if hand[i] > 8:
-                        straight = False
-                    elif hand[i] < 8 and hand[i + 1] >= 8 and i != hand[i] + 1:
-                        straight = False
+        if black.value > white.value:
+            return BLACK_WINS
+        elif white.value > black.value:
+            return WHITE_WINS
+        if black.type in [Hand.HIGH_CARD, Hand.PAIR, Hand.FLUSH]:
+            return compare_values(black.values, white.values)
+        elif black.type == Hand.TWO_PAIRS:
+            black_2nd_pair_val = min(k for k, v in black.value_counts.items() if v == 2)
+            white_2nd_pair_val = min(k for k, v in white.value_counts.items() if v == 2)
+            if black_2nd_pair_val > white_2nd_pair_val:
+                return BLACK_WINS
+            elif white_2nd_pair_val > black_2nd_pair_val:
+                return WHITE_WINS
+            else:
+                return compare_values(black.values, white.values)
         else:
-            straight = False
-    else:
-        for i in range(4):
-            if hand[i] + 1 != hand[i + 1]:
-                straight = False
-
-    if straight and flush:
-        values = [13 if card == 0 else card for card in hand]
-        values.sort()
-        hand_value = 8
-    else:
-        current_cards = 0
-        four_kind = False
-        full_house = False
-        third = False
-        pair = False
-        two_pair = False
-
-        for i in range(13):
-            if frequence[i] == 4:
-                four_kind = True
-            elif frequence[i] == 3:
-                if pair:
-                    full_house = True
-                else:
-                    third = True
-                current_cards += 3
-            elif frequence[i] == 2:
-                if third:
-                    full_house = True
-                elif pair:
-                    two_pair = True
-                else:
-                    pair = True
-                current_cards += 2
-
-        current_cards = 0
-
-        if four_kind:
-            values = [0] * 2
-            for i in range(13):
-                if frequence[i] == 4:
-                    current_cards += 4
-                    values[1] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[0] = 13 if i == 0 else i
-            hand_value = 7
-        elif full_house:
-            values = [0] * 2
-            for i in range(13):
-                if frequence[i] == 3:
-                    current_cards += 3
-                    values[1] = 13 if i == 0 else i
-                elif frequence[i] == 2:
-                    current_cards += 2
-                    values[0] = 13 if i == 0 else i
-            hand_value = 6
-        elif flush:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 5
-        elif straight:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 4
-        elif third:
-            values = [0] * 3
-            j = 0
-            for i in range(13):
-                if frequence[i] == 3:
-                    current_cards += 3
-                    values[2] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-            values.sort()
-            hand_value = 3
-        elif two_pair:
-            values = [0] * 3
-            j = 1
-            for i in range(13):
-                if frequence[i] == 2:
-                    current_cards += 2
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[0] = 13 if i == 0 else i
-            values.sort()
-            hand_value = 2
-        elif pair:
-            values = [0] * 4
-            j = 0
-            for i in range(13):
-                if frequence[i] == 2:
-                    current_cards += 2
-                    values[3] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-            values.sort()
-            hand_value = 1
-        else:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 0
-
-    return hand_value, values
-
-if __name__ == "__main__":
-    values = []
-    frequence = [0] * 13
-    for line in sys.stdin:
-        hand = []
-        for card in line.strip().split():
-            value, suit = card[:-1], card[-1]
-            hand.append(card_value(value))
-            frequence[hand[-1]] += 1
-            if suit != line.strip().split()[0][-1]:
-                flush = False
-        hand.sort()
-        hand_value_white, values_white = hand_value(flush)
-        hand.clear()
-        for card in input().strip().split():
-            value, suit = card[:-1], card[-1]
-            hand.append(card_value(value))
-            frequence[hand[-1]] += 1
-            if suit != input().strip().split()[0][-1]:
-                flush = False
-        hand.sort()
-        hand_value_black, values_black = hand_value(flush)
-        if hand_value_white < hand_value_black:
-            print("White wins.")
-        elif hand_value_white > hand_value_black:
-            print("Black wins.")
-        else:
-            tie = True
-            for i in range(len(values_white) - 1, -1, -1):
-                if values_white[i] < values_black[i]:
-                    print("White wins.")
-                    tie = False
-                    break
-                elif values_white[i] > values_black[i]:
-                    print("Black wins.")
-                    tie = False
-                    break
-            if tie:
-                print("Tie.")
+            return TIE
 
 
-import sys
+def main(file):
+    res = []
+    for line in file:
+        split = line.split()
+        black, white = Hand(split[:5]), Hand(split[5:])
+        res.append(solve(black, white) + '\n')
+    return res
 
-def card_value(value):
-    if value == 'A':
-        return 0
-    elif value == 'T':
-        return 9
-    elif value == 'J':
-        return 10
-    elif value == 'Q':
-        return 11
-    elif value == 'K':
-        return 12
-    else:
-        return int(value) - 1
 
-def hand_value(flush):
-    values = []
-    hand_value = None
-    last = hand[0]
-    straight = True
+if __name__ == '__main__':
+    print(''.join(main(sys.stdin)), end='')
 
-    if not last:
-        if hand[4] == 12:
-            for i in range(4):
-                if hand[i] - 1 != hand[i + 1]:
-                    if hand[i] > 8:
-                        straight = False
-                    elif hand[i] < 8 and hand[i + 1] >= 8 and i != hand[i] + 1:
-                        straight = False
-        else:
-            straight = False
-    else:
-        for i in range(4):
-            if hand[i] + 1 != hand[i + 1]:
-                straight = False
-
-    if straight and flush:
-        values = [13 if card == 0 else card for card in hand]
-        values.sort()
-        hand_value = 8
-    else:
-        current_cards = 0
-        four_kind = False
-        full_house = False
-        third = False
-        pair = False
-        two_pair = False
-
-        for i in range(13):
-            if frequence[i] == 4:
-                four_kind = True
-            elif frequence[i] == 3:
-                if pair:
-                    full_house = True
-                else:
-                    third = True
-                current_cards += 3
-            elif frequence[i] == 2:
-                if third:
-                    full_house = True
-                elif pair:
-                    two_pair = True
-                else:
-                    pair = True
-                current_cards += 2
-
-        current_cards = 0
-
-        if four_kind:
-            values = [0] * 2
-            for i in range(13):
-                if frequence[i] == 4:
-                    current_cards += 4
-                    values[1] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[0] = 13 if i == 0 else i
-            hand_value = 7
-        elif full_house:
-            values = [0] * 2
-            for i in range(13):
-                if frequence[i] == 3:
-                    current_cards += 3
-                    values[1] = 13 if i == 0 else i
-                elif frequence[i] == 2:
-                    current_cards += 2
-                    values[0] = 13 if i == 0 else i
-            hand_value = 6
-        elif flush:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 5
-        elif straight:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 4
-        elif third:
-            values = [0] * 3
-            j = 0
-            for i in range(13):
-                if frequence[i] == 3:
-                    current_cards += 3
-                    values[2] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-            values.sort()
-            hand_value = 3
-        elif two_pair:
-            values = [0] * 3
-            j = 1
-            for i in range(13):
-                if frequence[i] == 2:
-                    current_cards += 2
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[0] = 13 if i == 0 else i
-            values.sort()
-            hand_value = 2
-        elif pair:
-            values = [0] * 4
-            j = 0
-            for i in range(13):
-                if frequence[i] == 2:
-                    current_cards += 2
-                    values[3] = 13 if i == 0 else i
-                elif frequence[i] == 1:
-                    current_cards += 1
-                    values[j] = 13 if i == 0 else i
-                    j += 1
-            values.sort()
-            hand_value = 1
-        else:
-            values = [13 if card == 0 else card for card in hand]
-            values.sort()
-            hand_value = 0
-
-    return hand_value, values
-
-if __name__ == "__main__":
-    values = []
-    frequence = [0] * 13
-    for line in sys.stdin:
-        hand = []
-        for card in line.strip().split():
-            value, suit = card[:-1], card[-1]
-            hand.append(card_value(value))
-            frequence[hand[-1]] += 1
-            if suit != line.strip().split()[0][-1]:
-                flush = False
-        hand.sort()
-        hand_value_white, values_white = hand_value(flush)
-        hand.clear()
-        for card in input().strip().split():
-            value, suit = card[:-1], card[-1]
-            hand.append(card_value(value))
-            frequence[hand[-1]] += 1
-            if suit != input().strip().split()[0][-1]:
-                flush = False
-        hand.sort()
-        hand_value_black, values_black = hand_value(flush)
-        if hand_value_white < hand_value_black:
-            print("White wins.")
-        elif hand_value_white > hand_value_black:
-            print("Black wins.")
-        else:
-            tie = True
-            for i in range(len(values_white) - 1, -1, -1):
-                if values_white[i] < values_black[i]:
-                    print("White wins.")
-                    tie = False
-                    break
-                elif values_white[i] > values_black[i]:
-                    print("Black wins.")
-                    tie = False
-                    break
-            if tie:
-                print("Tie.")
 
 #Sample Input
-#2H 3D 5S 9C KD 2C 3H 4S 8C AH
-#2H 4S 4C 2D 4H 2S 8S AS QS 3S
-#2H 3D 5S 9C KD 2C 3H 4S 8C KH
-#2H 3D 5S 9C KD 2D 3H 5C 9S KH
+
+# 2H 3D 5S 9C KD 2C 3H 4S 8C AH
+# 2H 4S 4C 2D 4H 2S 8S AS QS 3S
+# 2H 3D 5S 9C KD 2C 3H 4S 8C KH
+# 2H 3D 5S 9C KD 2D 3H 5C 9S KH
 
 #Sample Output
 #White wins.
