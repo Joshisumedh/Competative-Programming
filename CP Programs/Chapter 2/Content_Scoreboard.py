@@ -135,5 +135,5 @@ if __name__ == "__main__":
 #1 1 25 C
 
 #Sample Output
-#1 2 66
+#1 2 46
 #3 1 11
